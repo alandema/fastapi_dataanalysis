@@ -1,5 +1,7 @@
 testing_notebooks/
 config.env
+.conda/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
