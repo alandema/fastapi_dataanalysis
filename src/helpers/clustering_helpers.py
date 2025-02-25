@@ -3,7 +3,6 @@ from sklearn.cluster import DBSCAN
 import numpy as np
 from sklearn import metrics
 import itertools
-#test
 
 def find_best_dbscan_params(features,eps_range,min_samples_range):
     best_score = -np.inf

@@ -23,7 +23,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 class ClusteringParams(BaseModel):
     eps_range: List[float] = [0.1, 0.5, 1.0]
     min_samples_range: List[int] = [5, 10, 15]
-    label_column_index: Optional[int] = -1  # Index of the label column, if it exists
+    label_column_index: Optional[int] = None  # Index of the label column, if it exists
     max_grid_search_combinations: Optional[int] = 9  # Limit grid search combinations
 
 class SimilarityParams(BaseModel):
@@ -125,7 +125,7 @@ async def perform_clustering(
                 "rows_before_processing": len(df),
                 "numeric_columns": numeric_cols,
                 "categorical_columns": categorical_cols,
-                "label_column": columns[params.label_column_index] if params.label_column_index is not None else None
+                "label_column": label_column if labels_true else None
             },
             "grid_search": {
                 "parameter_combinations_tested": len(grid_search_results),
