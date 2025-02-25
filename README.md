@@ -1,0 +1,1 @@
+# curotec_task
