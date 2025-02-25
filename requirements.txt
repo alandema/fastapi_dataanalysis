@@ -1,4 +1,3 @@
-python-dotenv
 psycopg
 mlflow
 scikit-learn==1.3.2
