@@ -37,6 +37,9 @@ The server will start at `http://127.0.0.1:8000/`.
     - `file`: CSV file (required)
     - `params`: JSON string of similarity search parameters (optional)
 
+### Docs
+- **/docs** : You can always access the FastAPI docs at `/docs` (e.g., http://127.0.0.1:8000/docs). This will provide a "friendly UI" for interacting with the API.
+
 ## Parameters
 
 ### Clustering Parameters
