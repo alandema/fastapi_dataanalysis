@@ -1,28 +1,21 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import JSONResponse
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 import pandas as pd
 import numpy as np
-from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from helpers.clustering_helpers import find_best_dbscan_params, remap_labels
+from helpers.clustering_helpers import find_best_dbscan_params
 from sklearn import metrics
 from sentence_transformers import SentenceTransformer
 import io
 import json
-import os
 from pydantic import BaseModel
 
 # Initialize FastAPI app
 app = FastAPI(title="Data Analysis API", 
               description="API for clustering and similarity search operations")
 
-# Create necessary directories
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("results", exist_ok=True)
 
 # Initialize the sentence transformer model for embeddings
 model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -45,7 +38,7 @@ async def root():
 @app.post("/clustering")
 async def perform_clustering(
     file: UploadFile = File(...),
-    params: ClusteringParams = Form(None)
+    params: Optional[str] = Form(...)
 ):
     params = ClusteringParams.model_validate_json(params) if params else ClusteringParams()
 
@@ -100,7 +93,7 @@ async def perform_clustering(
         scaler = StandardScaler()
         features_scaled = scaler.fit_transform(features_preprocessed)
 
-        best_params, grid_search_results, best_labels = find_best_dbscan_params(
+        best_params, grid_search_results, best_labels,best_silhouette_score = find_best_dbscan_params(
             features=features_scaled,
             eps_range=params.eps_range,
             min_samples_range=params.min_samples_range
@@ -111,18 +104,16 @@ async def perform_clustering(
         result_df = df.copy()
         result_df['cluster'] = best_labels
 
-        additional_metrics = {"silhouette_coefficient": grid_search_results['combo_result']['metrics']['silhouette_score']}
-
-        best_labels_remapped = remap_labels(labels_true, best_labels)
+        additional_metrics = {}
         if labels_true is not None:
             try:
                 # Calculate the requested metrics
                 additional_metrics = {
-                    "homogeneity": float(metrics.homogeneity_score(labels_true, best_labels_remapped)),
-                    "completeness": float(metrics.completeness_score(labels_true, best_labels_remapped)),
-                    "v_measure": float(metrics.v_measure_score(labels_true, best_labels_remapped)),
-                    "adjusted_rand_index": float(metrics.adjusted_rand_score(labels_true, best_labels_remapped)),
-                    "adjusted_mutual_information": float(metrics.adjusted_mutual_info_score(labels_true, best_labels_remapped)),
+                    "homogeneity": float(metrics.homogeneity_score(labels_true, best_labels)),
+                    "completeness": float(metrics.completeness_score(labels_true, best_labels)),
+                    "v_measure": float(metrics.v_measure_score(labels_true, best_labels)),
+                    "adjusted_rand_index": float(metrics.adjusted_rand_score(labels_true, best_labels)),
+                    "adjusted_mutual_information": float(metrics.adjusted_mutual_info_score(labels_true, best_labels)),
                 }
             except Exception as e:
                 additional_metrics = {"error": str(e)}
@@ -145,6 +136,7 @@ async def perform_clustering(
                 "number_of_clusters": len(all_cluster_ids[all_cluster_ids != -1]),
                 "noise_points": int(np.sum(best_labels == -1)),
                 "noise_percentage": float(np.sum(best_labels == -1) / len(result_df) * 100),
+                "silhouette_coefficient": best_silhouette_score,
                 "additional_metrics": additional_metrics
             }
         }

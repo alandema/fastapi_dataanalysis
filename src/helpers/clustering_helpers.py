@@ -3,8 +3,6 @@ from sklearn.cluster import DBSCAN
 import numpy as np
 from sklearn import metrics
 import itertools
-from sklearn.metrics import confusion_matrix
-from scipy.optimize import linear_sum_assignment
 
 
 def find_best_dbscan_params(features,eps_range,min_samples_range):
@@ -80,14 +78,4 @@ def find_best_dbscan_params(features,eps_range,min_samples_range):
         dbscan = DBSCAN(eps=best_params['eps'], min_samples=best_params['min_samples'])
         best_labels = dbscan.fit_predict(features)
     
-    return best_params, grid_search_results, best_labels
-
-
-def remap_labels(y_true, y_pred):
-
-    confusion_mat = confusion_matrix(y_true, y_pred)
-    row_inds, col_inds = linear_sum_assignment(confusion_mat, maximize=True)
-    label_map = dict(zip(col_inds, row_inds))
-    remapped_y_pred = np.vectorize(label_map.get)(y_pred)
-    
-    return remapped_y_pred
+    return best_params, grid_search_results, best_labels, best_score
