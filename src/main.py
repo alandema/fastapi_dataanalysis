@@ -13,12 +13,13 @@ import json
 from pydantic import BaseModel
 
 # Initialize FastAPI app
-app = FastAPI(title="Data Analysis API", 
+app = FastAPI(title="Data Analysis API",
               description="API for clustering and similarity search operations")
 
 
 # Initialize the sentence transformer model for embeddings
 model = SentenceTransformer('all-MiniLM-L6-v2')
+
 
 class ClusteringParams(BaseModel):
     eps_range: List[float] = [0.1, 0.5, 1.0]
@@ -26,14 +27,17 @@ class ClusteringParams(BaseModel):
     label_column_index: Optional[int] = None  # Index of the label column, if it exists
     max_grid_search_combinations: Optional[int] = 9  # Limit grid search combinations
 
+
 class SimilarityParams(BaseModel):
     text_column: str  # Column containing text to embed
     query_text: str = None  # Optional text to compare against
     top_k: int = 5  # Number of most similar items to return
 
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to the Data Analysis API. Use /clustering or /similarity endpoints."}
+
 
 @app.post("/clustering")
 async def perform_clustering(
@@ -44,12 +48,12 @@ async def perform_clustering(
 
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
-    
+
     try:
         # Read the CSV file
         contents = await file.read()
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
-        
+
         # Define parameters
         if params is None:
             params = ClusteringParams()
@@ -61,13 +65,14 @@ async def perform_clustering(
         labels_true = None
         if params.label_column_index is not None:
             if params.label_column_index >= len(columns):
-                raise HTTPException(status_code=400, detail=f"Invalid label column index. Must be smaller than {len(columns)-1}")
-            
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid label column index. Must be smaller than {len(columns)-1}")
+
             label_column = columns[params.label_column_index]
             labels_true = df[label_column].copy()
             df = df.drop(columns=[label_column])
             columns.remove(label_column)
-        
+
         numeric_cols = []
         categorical_cols = []
         for column in columns:
@@ -77,7 +82,7 @@ async def perform_clustering(
                 numeric_cols.append(column)
             except ValueError:
                 categorical_cols.append(column)
-        
+
         # Create preprocessing pipeline
         preprocessor = ColumnTransformer(
             transformers=[
@@ -86,20 +91,20 @@ async def perform_clustering(
             ],
             remainder='drop'
         )
-        
+
         # Apply preprocessing
         features_preprocessed = preprocessor.fit_transform(df)
 
         scaler = StandardScaler()
         features_scaled = scaler.fit_transform(features_preprocessed)
 
-        best_params, grid_search_results, best_labels,best_silhouette_score = find_best_dbscan_params(
+        best_params, grid_search_results, best_labels, best_silhouette_score = find_best_dbscan_params(
             features=features_scaled,
             eps_range=params.eps_range,
             min_samples_range=params.min_samples_range
         )
         all_cluster_ids = np.unique(best_labels)
-        
+
         # Add cluster labels to the dataframe
         result_df = df.copy()
         result_df['cluster'] = best_labels
@@ -139,59 +144,56 @@ async def perform_clustering(
                 "additional_metrics": additional_metrics
             }
         }
-        
+
         return response
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during clustering: {str(e)}")
+
 
 @app.post("/similarity")
 async def perform_similarity_search(
     file: UploadFile = File(...),
-    params: SimilarityParams = None
+    params: Optional[str] = Form(...)
 ):
-    """
-    Endpoint for text similarity search using vector embeddings.
-    
-    Upload a CSV file with a text column.
-    Specify text_column, query_text (optional), and top_k parameters.
-    """
+    params = SimilarityParams.model_validate_json(params) if params else SimilarityParams()
+
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
-    
+
     if params is None:
         raise HTTPException(status_code=400, detail="Parameters required: at least text_column must be specified")
-    
+
     try:
         # Read the CSV file
         contents = await file.read()
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
-        
+
         # Verify the text column exists
         if params.text_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"Text column '{params.text_column}' not found in dataset")
-            
+
         # Remove rows with missing text
         df = df.dropna(subset=[params.text_column])
-        
+
         if df.empty:
             raise HTTPException(status_code=400, detail="No valid text data found in the specified column")
-        
+
         # Create embeddings for the text column
         texts = df[params.text_column].tolist()
         embeddings = model.encode(texts)
-        
+
         # If query text is provided, find similar items
         if params.query_text:
             # Encode the query
             query_embedding = model.encode([params.query_text])[0]
-            
+
             # Calculate similarity scores
             similarities = metrics.pairwise.cosine_similarity([query_embedding], embeddings)[0]
-            
+
             # Get top k similar items
             top_indices = similarities.argsort()[-params.top_k:][::-1]
-            
+
             # Create result with similarities
             similar_items = []
             for idx in top_indices:
@@ -201,13 +203,13 @@ async def perform_similarity_search(
                     "similarity_score": float(similarities[idx]),
                     "original_row": json.loads(df.iloc[idx].to_json())
                 })
-                
+
             return {
                 "message": "Similarity search completed successfully",
                 "query": params.query_text,
                 "similar_items": similar_items
             }
-        
+
         # Otherwise just return info about the embedding process
         else:
             return {
@@ -217,7 +219,7 @@ async def perform_similarity_search(
                 "text_column": params.text_column,
                 "note": "Submit a query_text parameter to perform similarity search"
             }
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during similarity search: {str(e)}")
 
