@@ -18,7 +18,7 @@ This repository contains a FastAPI application that provides endpoints for data 
 Run the FastAPI application: python src/main.py
 
 
-The server will start at `http://0.0.0.0:8000`.
+The server will start at `http://127.0.0.1:8000/`.
 
 ## API Endpoints
 
