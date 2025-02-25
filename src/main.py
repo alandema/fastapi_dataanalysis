@@ -117,7 +117,6 @@ async def perform_clustering(
                 }
             except Exception as e:
                 additional_metrics = {"error": str(e)}
-        
         # Return results
         response = {
             "message": "Enhanced clustering completed successfully",
@@ -125,7 +124,7 @@ async def perform_clustering(
                 "rows_before_processing": len(df),
                 "numeric_columns": numeric_cols,
                 "categorical_columns": categorical_cols,
-                "label_column": label_column if labels_true else None
+                "label_column": label_column if params.label_column_index else None
             },
             "grid_search": {
                 "parameter_combinations_tested": len(grid_search_results),
