@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from helpers.clustering_helpers import find_best_dbscan_params
+from helpers.clustering_helpers import find_best_dbscan_params, CustomMFA
 from sklearn import metrics
 from sentence_transformers import SentenceTransformer
 import io
@@ -28,6 +28,8 @@ class ClusteringParams(BaseModel):
     min_samples_range: List[int] = [5, 10, 15]
     label_column_index: Optional[int] = None  # Index of the label column, if it exists
     max_grid_search_combinations: Optional[int] = 9  # Limit grid search combinations
+    n_components_global: Optional[int] = 2  # Number of global components for MFA
+    do_mfa: Optional[bool] = False
 
 
 class SimilarityParams(BaseModel):
@@ -46,13 +48,44 @@ async def perform_clustering(
     file: UploadFile = File(...),
     params: Optional[str] = Form(...)
 ):
+    """
+    Perform DBSCAN clustering on the uploaded CSV file.
+
+    This function reads a CSV file, preprocesses the data, and applies DBSCAN clustering
+    using either default or user-specified parameters. It returns the clustering results
+    and performance metrics.
+
+    Parameters:
+    -----------
+    file : UploadFile
+        The CSV file to be processed. Must have a .csv extension.
+    params : Optional[str], default None
+        A JSON string containing clustering parameters. If not provided, default parameters are used.
+
+    Returns:
+    --------
+    dict
+        A dictionary containing:
+        - 'best_params': The best parameters found for DBSCAN
+        - 'silhouette_score': The silhouette score for the clustering
+        - 'cluster_labels': The cluster labels for each data point
+        - 'num_clusters': The number of clusters found (excluding noise points)
+        - 'noise_points': The number of noise points
+
+    Raises:
+    -------
+    HTTPException
+        If the file is not a CSV or if there's an error in processing the file or performing clustering.
+    """
+
+    # Validate and parse the clustering parameters
     params = ClusteringParams.model_validate_json(params) if params else ClusteringParams()
 
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
 
     try:
-        # Read the CSV file
+        # Read the CSV file into a pandas DataFrame
         contents = await file.read()
         df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
 
@@ -96,6 +129,7 @@ async def perform_clustering(
             ('scaler', StandardScaler())
         ])
 
+        # Create the full preprocessing pipeline
         preprocessor = ColumnTransformer(
             transformers=[
                 ('num', numerical_pipeline, numeric_cols),
@@ -103,8 +137,23 @@ async def perform_clustering(
             ],
             remainder='drop'
         )
-        # Apply preprocessing
+
+        # Fit and transform the data using the preprocessing pipeline
         features_scaled = preprocessor.fit_transform(df)
+
+        if params.do_mfa:
+            n_numeric = len(numeric_cols)
+            n_cat_encoded = features_scaled.shape[1]- n_numeric
+            group_numeric = np.arange(0, n_numeric)
+            group_cat = np.arange(n_numeric, n_numeric + n_cat_encoded)
+            groups = [group_numeric, group_cat]
+
+            mfa_pipeline = Pipeline([
+                ('preprocessor', preprocessor),
+                ('mfa', CustomMFA(groups=groups, n_components_global=params.n_components_global))
+            ])
+
+            features_scaled = mfa_pipeline.fit_transform(df)
 
         best_params, grid_search_results, best_labels, best_silhouette_score = find_best_dbscan_params(
             features=features_scaled,
