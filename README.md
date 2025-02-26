@@ -47,6 +47,8 @@ The server will start at `http://127.0.0.1:8000/`.
 - `min_samples_range`: List of integer values for DBSCAN min_samples parameter
 - `label_column_index`: Index of the label column (if exists)
 - `max_grid_search_combinations`: Maximum number of parameter combinations for grid search
+- `n_components_global`: Number of global components for MFA
+- `do_mfa`: Boolean flag to enable MFA
 
 ### Similarity Parameters
 - `text_column`: Column name containing text to embed
