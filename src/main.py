@@ -11,6 +11,7 @@ from sentence_transformers import SentenceTransformer
 import io
 import json
 from pydantic import BaseModel
+from sklearn.pipeline import Pipeline
 
 # Initialize FastAPI app
 app = FastAPI(title="Data Analysis API",
@@ -84,10 +85,15 @@ async def perform_clustering(
                 categorical_cols.append(column)
 
         # Create preprocessing pipeline
+        categorical_pipeline = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='most_frequent')),  # Use most frequent for categorical data
+            ('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+        ])
+
         preprocessor = ColumnTransformer(
             transformers=[
                 ('num', SimpleImputer(strategy='mean'), numeric_cols),
-                ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_cols)
+                ('cat', categorical_pipeline, categorical_cols)
             ],
             remainder='drop'
         )
