@@ -12,6 +12,7 @@ import io
 import json
 from pydantic import BaseModel
 from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA
 
 # Initialize FastAPI app
 app = FastAPI(title="Data Analysis API",
@@ -90,19 +91,20 @@ async def perform_clustering(
             ('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
         ])
 
+        numerical_pipeline = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='mean')),
+            ('scaler', StandardScaler())
+        ])
+
         preprocessor = ColumnTransformer(
             transformers=[
-                ('num', SimpleImputer(strategy='mean'), numeric_cols),
+                ('num', numerical_pipeline, numeric_cols),
                 ('cat', categorical_pipeline, categorical_cols)
             ],
             remainder='drop'
         )
-
         # Apply preprocessing
-        features_preprocessed = preprocessor.fit_transform(df)
-
-        scaler = StandardScaler()
-        features_scaled = scaler.fit_transform(features_preprocessed)
+        features_scaled = preprocessor.fit_transform(df)
 
         best_params, grid_search_results, best_labels, best_silhouette_score = find_best_dbscan_params(
             features=features_scaled,
